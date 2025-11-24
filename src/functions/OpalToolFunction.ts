@@ -1,9 +1,7 @@
 import { logger, Function, Response } from '@zaiusinc/app-sdk';
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
-import { getAssetFromCMP, createMilestoneWithinCampaign } from '../cmp';
-import axios from 'axios';
-import xlsx from 'xlsx';
+import { createMilestoneWithinCampaign } from '../cmp';
 
 
 interface AssetParameters {
@@ -147,12 +145,6 @@ export class OpalToolFunction extends Function {
 
     if (this.request.path === '/discovery') {
       return new Response(200, discoveryPayload);
-    } else if (this.request.path === '/tools/get-excel-details') {
-      // LP addded:call to the helper function
-      const params = this.extractParameters() as AssetParameters;
-      const authData = this.extractAuthData() as OptiAuthData;
-      const response = await this.queryExcel(params, authData);
-      return new Response(200, response);
     } else if (this.request.path === '/tools/create-milestone-within-campaign') {
 
       const params = this.extractParameters();
@@ -165,103 +157,6 @@ export class OpalToolFunction extends Function {
     } else {
       return new Response(400, 'Invalid path');
     }
-  }
-
-
-  private async queryExcel(parameters: AssetParameters, authData: OptiAuthData) {
-    const { asset_id } = parameters;
-
-    try {
-      if (!asset_id) {
-        throw new Error('Missing required parameter: asset_id');
-      }
-
-      const assetDetails = await getAssetFromCMP(asset_id, authData);
-      const dataImportBuffer = await this.downloadFileAsBuffer(assetDetails.url);
-      const workbook = xlsx.read(dataImportBuffer, { cellDates: true });
-
-
-      // Load the correct sheet
-      const sheetName = 'Launch Data';
-      const sheet = workbook.Sheets[sheetName];
-      if (!sheet) {
-        throw new Error(`Sheet "${sheetName}" not found in Excel file.`);
-      }
-
-      const rows = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, { raw: false });
-
-      // Format any Excel serial date values (like 45962) to "Oct 21, 2025"
-      const formattedRows = rows.map((row) => {
-        const formattedRow: Record<string, any> = {};
-
-        for (const [key, value] of Object.entries(row)) {
-          if (typeof value === 'number' && value > 40000 && value < 60000) {
-            // Likely an Excel serial date
-            const jsDate = this.excelSerialToJSDate(value);
-            const formattedDate = jsDate.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric'
-            });
-            formattedRow[key] = formattedDate;
-          } else {
-            formattedRow[key] = value;
-          }
-        }
-
-        return formattedRow;
-      });
-
-      logger.info('all rows', formattedRows);
-
-      return { rows: formattedRows };
-
-    } catch (error: any) {
-      console.error('Error fetching CMP asset data:', error.message);
-      throw new Error('Failed to fetch CMP asset data');
-    }
-  }
-
-  // Converts Excel serial date (e.g. 45962) to JS Date
-  private excelSerialToJSDate(serial: number): Date {
-    const utcDays = Math.floor(serial - 25569); // Excel epoch offset
-    const utcValue = utcDays * 86400; // seconds
-    const dateInfo = new Date(utcValue * 1000);
-
-    const fractionalDay = serial - Math.floor(serial) + 0.0000001;
-    const totalSeconds = Math.floor(86400 * fractionalDay);
-
-    const seconds = totalSeconds % 60;
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor(totalSeconds / 60) % 60;
-
-    return new Date(
-      dateInfo.getFullYear(),
-      dateInfo.getMonth(),
-      dateInfo.getDate(),
-      hours,
-      minutes,
-      seconds
-    );
-  }
-
-
-  // added this helper method to format Excel date strings
-  private formatExcelDate(value: string): string {
-    if (!value) return '';
-
-    // Split the input "DD/MM/YYYY" into parts
-    const [day, month, year] = value.split('/').map(Number);
-
-    // Create a JavaScript Date object (months are 0-indexed)
-    const date = new Date(year, month - 1, day);
-
-    // Format as "Mon D, YYYY"
-    return date.toLocaleDateString('en-US', {
-      month: 'short',  // "Nov"
-      day: 'numeric',  // 1
-      year: 'numeric'  // 2024
-    });
   }
 
   private extractAuthData() {
@@ -289,22 +184,6 @@ export class OpalToolFunction extends Function {
       return this.request.bodyJSON;
     }
   }
-
-  private async downloadFileAsBuffer(url: string): Promise<Buffer> {
-    const res = await axios.get(url, { responseType: 'arraybuffer' });
-    return Buffer.from(res.data);
-  }
-
-  private getCurrentMonthAndYear(): { month: string; year: number } {
-    const now = new Date();
-    // Get full month name (e.g., October, November)
-    const month = now.toLocaleString('default', { month: 'long' });
-    const year = now.getFullYear();
-    return { month, year };
-
-  }
-
-
 
   private async createMilestoneWithinCampaign(parameters: any, authData: OptiAuthData) {
     const { campaign_id, title, description, hex_color, tasks } = parameters;

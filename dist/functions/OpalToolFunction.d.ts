@@ -18,4 +18,5 @@ export declare class OpalToolFunction extends Function {
     private extractParameters;
     private downloadFileAsBuffer;
     private getCurrentMonthAndYear;
+    private createMilestoneWithinCampaign;
 }

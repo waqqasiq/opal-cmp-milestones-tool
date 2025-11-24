@@ -11,4 +11,13 @@ interface OptiAuthData {
     };
 }
 export declare const getAssetFromCMP: (assetId: string, authData: OptiAuthData) => Promise<any>;
+export declare const createMilestoneWithinCampaign: (campaignId: string, milestoneData: {
+    title: string;
+    description?: string | null;
+    due_date: string;
+    hex_color: string;
+    tasks?: Array<{
+        id: string;
+    }>;
+}, authData: OptiAuthData) => Promise<any>;
 export {};
