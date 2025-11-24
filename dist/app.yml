@@ -1,0 +1,20 @@
+meta:
+  app_id: opal_tool_lp
+  display_name: sample_opal_tool_lp
+  version: 1.0.0-dev.34
+  vendor: optimizely
+  summary: Opal tool to estimate time to run an experiment
+  support_url: https://support.optimizely.com
+  contact_email: support@optimizely.com
+  categories:
+    - Personalization & Content
+    - Opal
+  availability:
+    - all
+
+runtime: node22
+
+functions:
+  opal_tool:
+    entry_point: OpalToolFunction
+    description: Opal tool function
