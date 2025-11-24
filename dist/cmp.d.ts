@@ -10,7 +10,6 @@ interface OptiAuthData {
         product_sku: string;
     };
 }
-export declare const getAssetFromCMP: (assetId: string, authData: OptiAuthData) => Promise<any>;
 export declare const createMilestoneWithinCampaign: (campaignId: string, milestoneData: {
     title: string;
     description?: string | null;

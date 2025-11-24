@@ -1,15 +1,10 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OpalToolFunction = void 0;
 const app_sdk_1 = require("@zaiusinc/app-sdk");
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
 const cmp_1 = require("../cmp");
-const axios_1 = __importDefault(require("axios"));
-const xlsx_1 = __importDefault(require("xlsx"));
 function toIsoUtc(dateString) {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) {
@@ -128,13 +123,6 @@ class OpalToolFunction extends app_sdk_1.Function {
         if (this.request.path === '/discovery') {
             return new app_sdk_1.Response(200, discoveryPayload);
         }
-        else if (this.request.path === '/tools/get-excel-details') {
-            // LP addded:call to the helper function
-            const params = this.extractParameters();
-            const authData = this.extractAuthData();
-            const response = await this.queryExcel(params, authData);
-            return new app_sdk_1.Response(200, response);
-        }
         else if (this.request.path === '/tools/create-milestone-within-campaign') {
             const params = this.extractParameters();
             const authData = this.extractAuthData();
@@ -144,77 +132,6 @@ class OpalToolFunction extends app_sdk_1.Function {
         else {
             return new app_sdk_1.Response(400, 'Invalid path');
         }
-    }
-    async queryExcel(parameters, authData) {
-        const { asset_id } = parameters;
-        try {
-            if (!asset_id) {
-                throw new Error('Missing required parameter: asset_id');
-            }
-            const assetDetails = await (0, cmp_1.getAssetFromCMP)(asset_id, authData);
-            const dataImportBuffer = await this.downloadFileAsBuffer(assetDetails.url);
-            const workbook = xlsx_1.default.read(dataImportBuffer, { cellDates: true });
-            // Load the correct sheet
-            const sheetName = 'Launch Data';
-            const sheet = workbook.Sheets[sheetName];
-            if (!sheet) {
-                throw new Error(`Sheet "${sheetName}" not found in Excel file.`);
-            }
-            const rows = xlsx_1.default.utils.sheet_to_json(sheet, { raw: false });
-            // Format any Excel serial date values (like 45962) to "Oct 21, 2025"
-            const formattedRows = rows.map((row) => {
-                const formattedRow = {};
-                for (const [key, value] of Object.entries(row)) {
-                    if (typeof value === 'number' && value > 40000 && value < 60000) {
-                        // Likely an Excel serial date
-                        const jsDate = this.excelSerialToJSDate(value);
-                        const formattedDate = jsDate.toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                        });
-                        formattedRow[key] = formattedDate;
-                    }
-                    else {
-                        formattedRow[key] = value;
-                    }
-                }
-                return formattedRow;
-            });
-            app_sdk_1.logger.info('all rows', formattedRows);
-            return { rows: formattedRows };
-        }
-        catch (error) {
-            console.error('Error fetching CMP asset data:', error.message);
-            throw new Error('Failed to fetch CMP asset data');
-        }
-    }
-    // Converts Excel serial date (e.g. 45962) to JS Date
-    excelSerialToJSDate(serial) {
-        const utcDays = Math.floor(serial - 25569); // Excel epoch offset
-        const utcValue = utcDays * 86400; // seconds
-        const dateInfo = new Date(utcValue * 1000);
-        const fractionalDay = serial - Math.floor(serial) + 0.0000001;
-        const totalSeconds = Math.floor(86400 * fractionalDay);
-        const seconds = totalSeconds % 60;
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor(totalSeconds / 60) % 60;
-        return new Date(dateInfo.getFullYear(), dateInfo.getMonth(), dateInfo.getDate(), hours, minutes, seconds);
-    }
-    // added this helper method to format Excel date strings
-    formatExcelDate(value) {
-        if (!value)
-            return '';
-        // Split the input "DD/MM/YYYY" into parts
-        const [day, month, year] = value.split('/').map(Number);
-        // Create a JavaScript Date object (months are 0-indexed)
-        const date = new Date(year, month - 1, day);
-        // Format as "Mon D, YYYY"
-        return date.toLocaleDateString('en-US', {
-            month: 'short', // "Nov"
-            day: 'numeric', // 1
-            year: 'numeric' // 2024
-        });
     }
     extractAuthData() {
         // Extract auth data from the request headers
@@ -241,17 +158,6 @@ class OpalToolFunction extends app_sdk_1.Function {
             app_sdk_1.logger.warn('\'parameters\' key not found in request body. Using body directly.');
             return this.request.bodyJSON;
         }
-    }
-    async downloadFileAsBuffer(url) {
-        const res = await axios_1.default.get(url, { responseType: 'arraybuffer' });
-        return Buffer.from(res.data);
-    }
-    getCurrentMonthAndYear() {
-        const now = new Date();
-        // Get full month name (e.g., October, November)
-        const month = now.toLocaleString('default', { month: 'long' });
-        const year = now.getFullYear();
-        return { month, year };
     }
     async createMilestoneWithinCampaign(parameters, authData) {
         const { campaign_id, title, description, hex_color, tasks } = parameters;

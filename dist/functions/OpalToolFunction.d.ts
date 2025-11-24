@@ -11,12 +11,7 @@ export declare class OpalToolFunction extends Function {
      * Add your logic here to handle every tool declared in the discoveryPayload.
      */
     perform(): Promise<Response>;
-    private queryExcel;
-    private excelSerialToJSDate;
-    private formatExcelDate;
     private extractAuthData;
     private extractParameters;
-    private downloadFileAsBuffer;
-    private getCurrentMonthAndYear;
     private createMilestoneWithinCampaign;
 }

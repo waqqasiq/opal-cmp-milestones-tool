@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createMilestoneWithinCampaign = exports.getAssetFromCMP = void 0;
+exports.createMilestoneWithinCampaign = void 0;
 // import axios from 'axios';
 const axios_1 = __importDefault(require("axios"));
 const config_1 = require("./config");
@@ -14,28 +14,6 @@ function generateNumericId() {
     }
     return id;
 }
-// helper to get asset details from  CMP
-const getAssetFromCMP = async (assetId, authData) => {
-    try {
-        const headers = {
-            Accept: 'application/json',
-            'x-auth-token-type': 'opti-id',
-            Authorization: `${authData.credentials.token_type} ${authData.credentials.access_token}`,
-            'Accept-Encoding': 'gzip',
-            'x-request-id': generateNumericId(),
-            'x-org-sso-id': authData.credentials.org_sso_id,
-        };
-        const url = `${config_1.CMP_BASE_URL}/v3/asset-urls/${assetId}`;
-        const res = await axios_1.default.get(url, { headers });
-        console.log('res.data ', res.data);
-        return res.data;
-    }
-    catch (error) {
-        console.error(`Failed to get task ${assetId}`, error.message);
-        throw error;
-    }
-};
-exports.getAssetFromCMP = getAssetFromCMP;
 const createMilestoneWithinCampaign = async (campaignId, milestoneData, authData) => {
     try {
         // Validate required fields
