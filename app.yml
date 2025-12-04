@@ -1,7 +1,7 @@
 meta:
   app_id: opal_tool_cmp_wi
   display_name: sample_opal_tool_cmp_wi
-  version: 1.0.0-dev.36
+  version: 1.0.0-dev.37
   vendor: optimizely
   summary: Opal tool to create milestones within CMP
   support_url: https://support.optimizely.com

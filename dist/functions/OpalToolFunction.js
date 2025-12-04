@@ -15,28 +15,6 @@ function toIsoUtc(dateString) {
 // Define Opal tool metadata  - list of tools and their parameters
 const discoveryPayload = {
     'functions': [
-        // LP Added: query-excel endpoint to fetch campaigns from CMP Excel
-        {
-            'name': 'get_excel_details',
-            'description': 'Fetch data from excel file',
-            'parameters': [
-                {
-                    'name': 'asset_id',
-                    'type': 'string',
-                    'description': 'CMP asset ID',
-                    'required': true
-                }
-            ],
-            'endpoint': '/tools/get-excel-details',
-            'http_method': 'POST',
-            'auth_requirements': [
-                {
-                    'provider': 'OptiID',
-                    'scope_bundle': 'default',
-                    'required': true
-                }
-            ]
-        },
         {
             'name': 'create_milestone_within_campaign',
             'description': 'Create a milestone inside a CMP campaign',
