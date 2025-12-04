@@ -1,7 +1,7 @@
 import { logger, Function, Response } from '@zaiusinc/app-sdk';
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
-import { createMilestoneWithinCampaign } from '../cmp';
+import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign } from '../cmp';
 
 
 interface OptiAuthData {
