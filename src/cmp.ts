@@ -281,16 +281,32 @@ export const getTasksPage = async (
     'x-org-sso-id': authData.credentials.org_sso_id
   };
 
+  const params = {
+    campaign: campaignId,
+    offset,
+    page_size: pageSize
+  };
+
+  console.log('[CMP][getTasksPage] Request params:', params);
+
   const res: AxiosResponse<CmpTaskListResponse> = await axios.get(
     `${CMP_BASE_URL}/v3/tasks`,
-    {
-      headers,
-      params: {
-        campaign: campaignId,
-        offset,
-        page_size: pageSize
-      }
-    }
+    { headers, params }
+  );
+
+  console.log(
+    '[CMP][getTasksPage] Response status:',
+    res.status
+  );
+
+  console.log(
+    '[CMP][getTasksPage] Response keys:',
+    Object.keys(res.data || {})
+  );
+
+  console.log(
+    '[CMP][getTasksPage] Raw response:',
+    JSON.stringify(res.data, null, 2)
   );
 
   return res.data.data ?? [];
@@ -305,7 +321,14 @@ export const getAllTasksForCampaign = async (
   let offset = 0;
   let allTasks: CmpTask[] = [];
 
+  console.log('[CMP][getAllTasksForCampaign] Start');
+  console.log('[CMP][getAllTasksForCampaign] Campaign ID:', campaignId);
+
   while (true) {
+    console.log(
+      `[CMP][getAllTasksForCampaign] Fetching page: offset=${offset}`
+    );
+    
     const tasks = await getTasksPage(
       campaignId,
       offset,
@@ -313,14 +336,24 @@ export const getAllTasksForCampaign = async (
       authData
     );
 
+    console.log(
+      `[CMP][getAllTasksForCampaign] Fetched ${tasks.length} tasks`
+    );
+
     allTasks = allTasks.concat(tasks);
 
     if (tasks.length < PAGE_SIZE) {
+      console.log('[CMP][getAllTasksForCampaign] Last page reached');
       break; // no more pages
     }
 
     offset += PAGE_SIZE;
   }
+
+  console.log(
+    '[CMP][getAllTasksForCampaign] Total tasks:',
+    allTasks.length
+  );
 
   return allTasks;
 };

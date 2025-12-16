@@ -252,9 +252,7 @@ export class OpalToolFunction extends Function {
 
       const response = await this.getCampaignTasks(params, authData);
       return new Response(200, response);
-
-    }
-    else {
+    } else {
       return new Response(400, 'Invalid path');
     }
   }
@@ -377,18 +375,21 @@ export class OpalToolFunction extends Function {
   private async getCampaignTasks(parameters: any, authData: OptiAuthData) {
     const { campaign_id } = parameters;
 
+    console.log('[Opal][getCampaignTasks] Params:', parameters);
+    console.log('[Opal][getCampaignTasks] Auth org_sso_id:', authData.credentials.org_sso_id);
+
+
     if (!campaign_id) {
       throw new Error('campaign_id is required');
     }
 
     try {
       const tasks = await getAllTasksForCampaign(campaign_id, authData);
+      console.log('[Opal][getCampaignTasks] Returning tasks:', tasks.length);
       return { tasks };
     } catch (error: any) {
       logger.error('Error fetching campaign tasks:', error.message);
       throw new Error('Failed to fetch campaign tasks from CMP');
     }
   }
-
-
 }
