@@ -16,6 +16,24 @@ interface OptiAuthData {
   };
 }
 
+interface CmpCampaign {
+  id: string;
+  title: string;
+  description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at?: string;
+  is_hidden: boolean;
+  status: string;
+  reference_id?: string;
+  links: {
+    self: string;
+    parent_campaign: string | null;
+    child_campaigns: string[];
+  };
+}
+
+
 function generateNumericId() {
   let id = '';
   for (let i = 0; i < 10; i++) {
@@ -176,15 +194,44 @@ export const getCampaignById = async (
 
   const url = `${CMP_BASE_URL}/v3/campaigns/${campaignId}`;
 
-  const res: AxiosResponse = await axios.get(url, { headers });
+  const res: AxiosResponse<CmpCampaign> = await axios.get(url, { headers });
   return res.data;
 };
+
+export interface CampaignTreeNode {
+  id: string;
+  title: string;
+  status: string;
+  is_hidden: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
+  reference_id?: string;
+  children: CampaignTreeNode[];
+}
+
+interface CmpTask {
+  id: string;
+  title: string;
+  status: string;
+  campaign_id: string;
+  milestone_id?: string | null;
+  workflow_id?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+}
+
+interface CmpTaskListResponse {
+  data: CmpTask[];
+  meta?: {
+    total?: number;
+  };
+}
 
 export const getCampaignTree = async (
   campaignId: string,
   authData: OptiAuthData,
   visited = new Set<string>()
-): Promise<any> => {
+): Promise<CampaignTreeNode | null> => {
 
   if (visited.has(campaignId)) {
     return null; // safety guard
@@ -217,4 +264,65 @@ export const getCampaignTree = async (
     children
   };
 };
+
+export const getTasksPage = async (
+  campaignId: string,
+  offset: number,
+  pageSize: number,
+  authData: OptiAuthData
+): Promise<CmpTask[]> => {
+
+  const headers = {
+    Accept: 'application/json',
+    'x-auth-token-type': 'opti-id',
+    Authorization: `${authData.credentials.token_type} ${authData.credentials.access_token}`,
+    'Accept-Encoding': 'gzip',
+    'x-request-id': generateNumericId(),
+    'x-org-sso-id': authData.credentials.org_sso_id
+  };
+
+  const res: AxiosResponse<CmpTaskListResponse> = await axios.get(
+    `${CMP_BASE_URL}/v3/tasks`,
+    {
+      headers,
+      params: {
+        campaign: campaignId,
+        offset,
+        page_size: pageSize
+      }
+    }
+  );
+
+  return res.data.data ?? [];
+};
+
+export const getAllTasksForCampaign = async (
+  campaignId: string,
+  authData: OptiAuthData
+): Promise<CmpTask[]> => {
+
+  const PAGE_SIZE = 100;
+  let offset = 0;
+  let allTasks: CmpTask[] = [];
+
+  while (true) {
+    const tasks = await getTasksPage(
+      campaignId,
+      offset,
+      PAGE_SIZE,
+      authData
+    );
+
+    allTasks = allTasks.concat(tasks);
+
+    if (tasks.length < PAGE_SIZE) {
+      break; // no more pages
+    }
+
+    offset += PAGE_SIZE;
+  }
+
+  return allTasks;
+};
+
 

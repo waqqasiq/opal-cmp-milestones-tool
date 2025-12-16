@@ -1,7 +1,7 @@
 import { logger, Function, Response } from '@zaiusinc/app-sdk';
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
-import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign, getCampaignTree } from '../cmp';
+import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign, getCampaignTree, getAllTasksForCampaign } from '../cmp';
 
 
 interface OptiAuthData {
@@ -158,7 +158,29 @@ const discoveryPayload = {
           required: true
         }
       ]
+    },
+    {
+      name: 'get_campaign_tasks',
+      description: 'Fetch all tasks under a CMP campaign (paginated)',
+      parameters: [
+        {
+          name: 'campaign_id',
+          type: 'string',
+          description: 'CMP campaign ID',
+          required: true
+        }
+      ],
+      endpoint: '/tools/get-campaign-tasks',
+      http_method: 'POST',
+      auth_requirements: [
+        {
+          provider: 'OptiID',
+          scope_bundle: 'default',
+          required: true
+        }
+      ]
     }
+
   ]
 };
 
@@ -223,7 +245,16 @@ export class OpalToolFunction extends Function {
       const response = await this.getChildCampaigns(params, authData);
       return new Response(200, response);
 
-    } else {
+    } else if (this.request.path === '/tools/get-campaign-tasks') {
+
+      const params = this.extractParameters();
+      const authData = this.extractAuthData() as OptiAuthData;
+
+      const response = await this.getCampaignTasks(params, authData);
+      return new Response(200, response);
+
+    }
+    else {
       return new Response(400, 'Invalid path');
     }
   }
@@ -340,6 +371,22 @@ export class OpalToolFunction extends Function {
     } catch (error: any) {
       logger.error('Error fetching child campaigns:', error.message);
       throw new Error('Failed to fetch child campaigns from CMP');
+    }
+  }
+
+  private async getCampaignTasks(parameters: any, authData: OptiAuthData) {
+    const { campaign_id } = parameters;
+
+    if (!campaign_id) {
+      throw new Error('campaign_id is required');
+    }
+
+    try {
+      const tasks = await getAllTasksForCampaign(campaign_id, authData);
+      return { tasks };
+    } catch (error: any) {
+      logger.error('Error fetching campaign tasks:', error.message);
+      throw new Error('Failed to fetch campaign tasks from CMP');
     }
   }
 
