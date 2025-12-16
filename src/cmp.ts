@@ -24,6 +24,7 @@ function generateNumericId() {
   return id;
 }
 
+
 export const createMilestoneWithinCampaign = async (
   campaignId: string,
   milestoneData: {
@@ -159,3 +160,61 @@ export const updateMilestoneWithinCampaign = async (
     throw error;
   }
 };
+
+export const getCampaignById = async (
+  campaignId: string,
+  authData: OptiAuthData
+) => {
+  const headers = {
+    Accept: 'application/json',
+    'x-auth-token-type': 'opti-id',
+    Authorization: `${authData.credentials.token_type} ${authData.credentials.access_token}`,
+    'Accept-Encoding': 'gzip',
+    'x-request-id': generateNumericId(),
+    'x-org-sso-id': authData.credentials.org_sso_id
+  };
+
+  const url = `${CMP_BASE_URL}/v3/campaigns/${campaignId}`;
+
+  const res: AxiosResponse = await axios.get(url, { headers });
+  return res.data;
+};
+
+export const getCampaignTree = async (
+  campaignId: string,
+  authData: OptiAuthData,
+  visited = new Set<string>()
+): Promise<any> => {
+
+  if (visited.has(campaignId)) {
+    return null; // safety guard
+  }
+  visited.add(campaignId);
+
+  const campaign = await getCampaignById(campaignId, authData);
+
+  const children: any[] = [];
+  const childUrls = campaign.links?.child_campaigns || [];
+
+  for (const childUrl of childUrls) {
+    const childId = childUrl.split('/').pop();
+    if (!childId) continue;
+
+    const childTree = await getCampaignTree(childId, authData, visited);
+    if (childTree) {
+      children.push(childTree);
+    }
+  }
+
+  return {
+    id: campaign.id,
+    title: campaign.title,
+    status: campaign.status,
+    is_hidden: campaign.is_hidden,
+    start_date: campaign.start_date,
+    end_date: campaign.end_date,
+    reference_id: campaign.reference_id,
+    children
+  };
+};
+

@@ -1,7 +1,7 @@
 import { logger, Function, Response } from '@zaiusinc/app-sdk';
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
-import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign } from '../cmp';
+import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign, getCampaignTree } from '../cmp';
 
 
 interface OptiAuthData {
@@ -137,6 +137,27 @@ const discoveryPayload = {
           'required': true
         }
       ]
+    },
+    {
+      name: 'get_child_campaigns',
+      description: 'Fetch a campaign and recursively retrieve all child/sub-campaigns',
+      parameters: [
+        {
+          name: 'campaign_id',
+          type: 'string',
+          description: 'Root CMP campaign ID',
+          required: true
+        }
+      ],
+      endpoint: '/tools/get-child-campaigns',
+      http_method: 'POST',
+      auth_requirements: [
+        {
+          provider: 'OptiID',
+          scope_bundle: 'default',
+          required: true
+        }
+      ]
     }
   ]
 };
@@ -194,6 +215,14 @@ export class OpalToolFunction extends Function {
       const response = await this.updateMilestoneWithinCampaign(params, authData);
 
       return new Response(200, response);
+    } else if (this.request.path === '/tools/get-child-campaigns') {
+
+      const params = this.extractParameters();
+      const authData = this.extractAuthData() as OptiAuthData;
+
+      const response = await this.getChildCampaigns(params, authData);
+      return new Response(200, response);
+
     } else {
       return new Response(400, 'Invalid path');
     }
@@ -297,5 +326,22 @@ export class OpalToolFunction extends Function {
       throw new Error('Failed to update milestone in CMP');
     }
   }
+
+  private async getChildCampaigns(parameters: any, authData: OptiAuthData) {
+    const { campaign_id } = parameters;
+
+    if (!campaign_id) {
+      throw new Error('campaign_id is required');
+    }
+
+    try {
+      const tree = await getCampaignTree(campaign_id, authData);
+      return tree;
+    } catch (error: any) {
+      logger.error('Error fetching child campaigns:', error.message);
+      throw new Error('Failed to fetch child campaigns from CMP');
+    }
+  }
+
 
 }
