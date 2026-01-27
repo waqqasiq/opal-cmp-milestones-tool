@@ -1,7 +1,7 @@
 import { logger, Function, Response } from '@zaiusinc/app-sdk';
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
-import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign, getCampaignTree, getAllTasksForCampaign } from '../cmp';
+import { createMilestoneWithinCampaign, updateMilestoneWithinCampaign, getCampaignTree, getAllTasksForCampaign, getMilestonesWithinCampaign } from '../cmp';
 
 
 interface OptiAuthData {
@@ -179,8 +179,28 @@ const discoveryPayload = {
           required: true
         }
       ]
+    },
+    {
+      name: 'get_milestones_within_campaign',
+      description: 'Fetch all milestones within a CMP campaign',
+      parameters: [
+        {
+          name: 'campaign_id',
+          type: 'string',
+          description: 'CMP campaign ID',
+          required: true
+        }
+      ],
+      endpoint: '/tools/get-milestones-within-campaign',
+      http_method: 'POST',
+      auth_requirements: [
+        {
+          provider: 'OptiID',
+          scope_bundle: 'default',
+          required: true
+        }
+      ]
     }
-
   ]
 };
 
@@ -252,6 +272,14 @@ export class OpalToolFunction extends Function {
 
       const response = await this.getCampaignTasks(params, authData);
       return new Response(200, response);
+    } else if (this.request.path === '/tools/get-milestones-within-campaign') {
+
+      const params = this.extractParameters();
+      const authData = this.extractAuthData() as OptiAuthData;
+
+      const response = await this.getMilestonesWithinCampaign(params, authData);
+      return new Response(200, response);
+
     } else {
       return new Response(400, 'Invalid path');
     }
@@ -392,4 +420,29 @@ export class OpalToolFunction extends Function {
       throw new Error('Failed to fetch campaign tasks from CMP');
     }
   }
+
+  private async getMilestonesWithinCampaign(
+    parameters: any,
+    authData: OptiAuthData
+  ) {
+    const { campaign_id } = parameters;
+
+    if (!campaign_id) {
+      throw new Error('campaign_id is required');
+    }
+
+    try {
+      const milestones = await getMilestonesWithinCampaign(
+        campaign_id,
+        authData
+      );
+
+      return { milestones };
+    } catch (error: any) {
+      logger.error('Error fetching milestones:', error.message);
+      throw new Error('Failed to fetch milestones from CMP');
+    }
+  }
+
+
 }

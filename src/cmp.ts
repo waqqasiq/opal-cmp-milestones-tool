@@ -328,7 +328,6 @@ export const getAllTasksForCampaign = async (
     console.log(
       `[CMP][getAllTasksForCampaign] Fetching page: offset=${offset}`
     );
-    
     const tasks = await getTasksPage(
       campaignId,
       offset,
@@ -357,5 +356,40 @@ export const getAllTasksForCampaign = async (
 
   return allTasks;
 };
+
+export const getMilestonesWithinCampaign = async (
+  campaignId: string,
+  authData: OptiAuthData
+) => {
+  try {
+    if (!campaignId) {
+      throw new Error('campaignId is required');
+    }
+
+    const headers = {
+      Accept: 'application/json',
+      'x-auth-token-type': 'opti-id',
+      Authorization: `${authData.credentials.token_type} ${authData.credentials.access_token}`,
+      'Accept-Encoding': 'gzip',
+      'x-request-id': generateNumericId(),
+      'x-org-sso-id': authData.credentials.org_sso_id
+    };
+
+    const url = `${CMP_BASE_URL}/v3/milestones?campaign_id=${campaignId}`;
+
+    const res: AxiosResponse = await axios.get(url, { headers });
+
+    return res.data; // returns { data, pagination }
+  } catch (error: any) {
+    console.error('Failed to fetch milestones:', error.message);
+
+    if (axios.isAxiosError(error) && error.response) {
+      console.error('CMP Error:', error.response.data);
+    }
+
+    throw error;
+  }
+};
+
 
 
