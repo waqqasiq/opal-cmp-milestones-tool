@@ -391,5 +391,33 @@ export const getMilestonesWithinCampaign = async (
   }
 };
 
+// helper to get asset details from  CMP
+export const getAssetFromCMP = async (
+  assetId: string,
+  authData: OptiAuthData
+) => {
+  try {
+    const headers = {
+      Accept: 'application/json',
+      'x-auth-token-type': 'opti-id',
+      Authorization: `${authData.credentials.token_type} ${authData.credentials.access_token}`,
+      'Accept-Encoding': 'gzip',
+      'x-request-id': generateNumericId(),
+      'x-org-sso-id': authData.credentials.org_sso_id,
+    };
+
+    const url = `${CMP_BASE_URL}/v3/asset-urls/${assetId}`;
+
+    const res: AxiosResponse = await axios.get(url, { headers });
+
+
+    console.log('res.data ', res.data);
+    return res.data;
+  } catch (error: any) {
+    console.error(`Failed to get task ${assetId}`, error.message);
+    throw error;
+  }
+};
+
 
 
