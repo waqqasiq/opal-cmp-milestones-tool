@@ -600,7 +600,14 @@ export class OpalToolFunction extends Function {
 <title>Q1 Events Deck</title>
 <style>
 body { font-family: Calibri, Arial, sans-serif; background:#f9fafb; }
-.slide { width:1200px; margin:24px auto; border:2px solid #1D49E2; border-radius:16px; padding:16px 26px; background:#fff; }
+.slide {
+  width: 1200px;
+  margin: 24px auto;
+  border: 2px solid #1D49E2;
+  border-radius: 16px;
+  padding: 16px 26px;
+  background: #fff;
+}
 h1 { color:#1D49E2; margin:0; }
 h2 { color:#4b5563; margin:0 0 12px; }
 table { width:100%; border-collapse:collapse; }
