@@ -35,6 +35,23 @@ type GroupedEvents = Record<
   Record<string, { 'in-person': NormalizedEvent[]; online: NormalizedEvent[] }>
 >;
 
+interface SlideEvent {
+  title: string;
+  date: string;
+  stakeholder: string;
+  city: string;
+  isMultiLob: boolean;
+}
+
+interface Slide {
+  month: string;
+  lob: string;
+  legend: string;
+  inPerson: SlideEvent[];
+  online: SlideEvent[];
+}
+
+
 
 function toIsoUtc(dateString: string): string {
   const date = new Date(dateString);
@@ -222,7 +239,7 @@ const discoveryPayload = {
     },
     {
       name: 'generate_event_deck_from_excel',
-      description: 'Generate Q1 events HTML deck from a CMP Excel asset',
+      description: 'Generate Q1 event slides JSON from CMP Excel asset',
       parameters: [
         {
           name: 'asset_id',
@@ -321,7 +338,6 @@ export class OpalToolFunction extends Function {
       return new Response(200, response);
 
     } else if (this.request.path === '/tools/generate-event-deck-from-excel') {
-
       const params = this.extractParameters();
       const authData = this.extractAuthData() as OptiAuthData;
 
@@ -502,7 +518,6 @@ export class OpalToolFunction extends Function {
       throw new Error('asset_id is required');
     }
 
-    // 1. Fetch asset + download Excel
     const assetDetails = await getAssetFromCMP(asset_id, authData);
     const buffer = await this.downloadFileAsBuffer(assetDetails.url);
     const workbook = xlsx.read(buffer, { cellDates: true });
@@ -512,7 +527,6 @@ export class OpalToolFunction extends Function {
       throw new Error('No worksheet found in Excel');
     }
 
-    // 2. Parse rows (skip first 10 rows, header at row 11)
     const rows = xlsx.utils.sheet_to_json<Record<string, any>>(sheet, {
       range: 10,
       defval: ''
@@ -527,7 +541,6 @@ export class OpalToolFunction extends Function {
       'Other'
     ]);
 
-    // 3. Normalize rows
     const normalized: NormalizedEvent[] = rows.flatMap((row) => {
       if (!row['Event Begin Date'] || !row['LOB Description'] || !row['Title']) {
         return [];
@@ -569,12 +582,7 @@ export class OpalToolFunction extends Function {
       }));
     });
 
-
-    // 4. Group data
-    const grouped: Record<
-      string,
-      Record<string, { 'in-person': NormalizedEvent[]; online: NormalizedEvent[] }>
-    > = {};
+    const grouped: GroupedEvents = {};
 
     for (const e of normalized) {
       grouped[e.month] ??= {};
@@ -582,84 +590,46 @@ export class OpalToolFunction extends Function {
       grouped[e.month][e.lob][e.category].push(e);
     }
 
-    // 5. Build HTML
-    const html = this.buildEventDeckHtml(grouped);
+    const slides = this.buildSlidesJson(grouped);
 
-    return {
-      html,
-      content_type: 'text/html'
-    };
+    return { slides };
   }
 
-  private buildEventDeckHtml(grouped: GroupedEvents): string {
-    let html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<title>Q1 Events Deck</title>
-<style>
-body { font-family: Calibri, Arial, sans-serif; background:#f9fafb; }
-.slide {
-  width: 1200px;
-  margin: 24px auto;
-  border: 2px solid #1D49E2;
-  border-radius: 16px;
-  padding: 16px 26px;
-  background: #fff;
-}
-h1 { color:#1D49E2; margin:0; }
-h2 { color:#4b5563; margin:0 0 12px; }
-table { width:100%; border-collapse:collapse; }
-th { text-align:left; font-size:16px; }
-td { vertical-align:top; width:25%; }
-li { font-size:15px; margin-bottom:6px; }
-.multi-lob { font-style: italic; }
-.online { color:#FF9ACC; }
-.meta { font-size:13px; display:block; color:#6b7280; }
-.legend { float:right; font-size:12px; font-style:italic; color:#6b7280; }
-</style>
-</head>
-<body>
-`;
+
+  private buildSlidesJson(grouped: GroupedEvents): Slide[] {
+    const slides: Slide[] = [];
 
     for (const month of Object.keys(grouped)) {
       for (const lob of Object.keys(grouped[month])) {
-        const inPerson = grouped[month][lob]['in-person'];
-        const online = grouped[month][lob].online;
+        const inPerson = grouped[month][lob]['in-person'].map((e) => ({
+          title: e.title,
+          date: e.date,
+          stakeholder: e.stakeholder,
+          city: e.city,
+          isMultiLob: e.isMultiLob
+        }));
 
-        const render = (arr: any[], isOnline = false) =>
-          `<ul>${arr.map((e) => `
-<li class="${isOnline ? 'online' : ''}">
-  <strong class="${e.isMultiLob ? 'multi-lob' : ''}">${e.title}</strong> — ${e.date}
-  <span class="meta">Business Stakeholder: ${e.stakeholder}</span>
-  <span class="meta">City: ${e.city}</span>
-</li>`).join('')}</ul>`;
+        const online = grouped[month][lob].online.map((e) => ({
+          title: e.title,
+          date: e.date,
+          stakeholder: e.stakeholder,
+          city: e.city,
+          isMultiLob: e.isMultiLob
+        }));
 
-        html += `
-<div class="slide">
-  <div class="legend">
-  Italicized event – Event is aligned to more than one LOB
-</div>
-  <h1>${month}</h1>
-  <h2>${lob}</h2>
-  <table>
-    <tr>
-      <th>In-Person</th><th>In-Person</th><th>In-Person</th><th>Online</th>
-    </tr>
-    <tr>
-      <td>${render(inPerson.filter((_, i) => i % 3 === 0))}</td>
-      <td>${render(inPerson.filter((_, i) => i % 3 === 1))}</td>
-      <td>${render(inPerson.filter((_, i) => i % 3 === 2))}</td>
-      <td>${render(online, true)}</td>
-    </tr>
-  </table>
-</div>`;
+        slides.push({
+          month,
+          lob,
+          legend: 'Italicized event – Event is aligned to more than one LOB',
+          inPerson,
+          online
+        });
       }
     }
 
-    return html + '</body></html>';
+    return slides;
   }
+
 
 
   private extractFirst(value: string): string {
