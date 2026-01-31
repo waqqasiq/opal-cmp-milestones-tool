@@ -19,6 +19,23 @@ interface OptiAuthData {
   };
 }
 
+interface NormalizedEvent {
+  month: string;
+  lob: string;
+  category: 'in-person' | 'online';
+  title: string;
+  date: string;
+  stakeholder: string;
+  city: string;
+  isMultiLob: boolean;
+}
+
+type GroupedEvents = Record<
+  string,
+  Record<string, { 'in-person': NormalizedEvent[]; online: NormalizedEvent[] }>
+>;
+
+
 function toIsoUtc(dateString: string): string {
   const date = new Date(dateString);
 
@@ -511,40 +528,53 @@ export class OpalToolFunction extends Function {
     ]);
 
     // 3. Normalize rows
-    const normalized = rows.flatMap(row => {
+    const normalized: NormalizedEvent[] = rows.flatMap((row) => {
       if (!row['Event Begin Date'] || !row['LOB Description'] || !row['Title']) {
         return [];
       }
 
       const start = new Date(row['Event Begin Date']);
-      if (isNaN(start.getTime())) return [];
+      if (isNaN(start.getTime())) {
+        return [];
+      }
 
       const month = start.toLocaleString('en-US', { month: 'long' });
-      if (!MONTHS_IN_SCOPE.includes(month)) return [];
+      if (!MONTHS_IN_SCOPE.includes(month)) {
+        return [];
+      }
 
       const lobs = String(row['LOB Description'])
         .split(',')
-        .map(l => l.trim())
-        .filter(l => ALLOWED_LOBS.has(l));
+        .map((l) => l.trim())
+        .filter((l) => ALLOWED_LOBS.has(l));
 
-      if (!lobs.length) return [];
+      if (!lobs.length) {
+        return [];
+      }
 
       const isMultiLob = lobs.length > 1;
 
-      return lobs.map(lob => ({
+      return lobs.map((lob): NormalizedEvent => ({
         month,
         lob,
         category: this.getEventCategory(row['Event Type'] || ''),
         title: row['Title'],
-        date: start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        date: start.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        }),
         stakeholder: this.extractFirst(row['Business Stakeholder']),
         city: this.extractFirst(row['Business Area']),
         isMultiLob
       }));
     });
 
+
     // 4. Group data
-    const grouped: Record<string, any> = {};
+    const grouped: Record<
+      string,
+      Record<string, { 'in-person': NormalizedEvent[]; online: NormalizedEvent[] }>
+    > = {};
 
     for (const e of normalized) {
       grouped[e.month] ??= {};
@@ -561,7 +591,7 @@ export class OpalToolFunction extends Function {
     };
   }
 
-  private buildEventDeckHtml(grouped: Record<string, any>): string {
+  private buildEventDeckHtml(grouped: GroupedEvents): string {
     let html = `
 <!doctype html>
 <html>
@@ -592,7 +622,7 @@ li { font-size:15px; margin-bottom:6px; }
         const online = grouped[month][lob].online;
 
         const render = (arr: any[], isOnline = false) =>
-          `<ul>${arr.map(e => `
+          `<ul>${arr.map((e) => `
 <li class="${isOnline ? 'online' : ''}">
   <strong class="${e.isMultiLob ? 'multi-lob' : ''}">${e.title}</strong> — ${e.date}
   <span class="meta">Business Stakeholder: ${e.stakeholder}</span>
@@ -601,7 +631,9 @@ li { font-size:15px; margin-bottom:6px; }
 
         html += `
 <div class="slide">
-  <div class="legend">Italicized event – Event is aligned to more than one LOB</div>
+  <div class="legend">
+  Italicized event – Event is aligned to more than one LOB
+</div>
   <h1>${month}</h1>
   <h2>${lob}</h2>
   <table>
@@ -627,7 +659,7 @@ li { font-size:15px; margin-bottom:6px; }
     return (
       String(value || '')
         .split(/[,;]/)
-        .map(v => v.trim())
+        .map((v) => v.trim())
         .filter(Boolean)[0] || '—'
     );
   }
@@ -644,7 +676,5 @@ li { font-size:15px; margin-bottom:6px; }
     const res = await axios.get(url, { responseType: 'arraybuffer' });
     return Buffer.from(res.data);
   }
-
-
 
 }
