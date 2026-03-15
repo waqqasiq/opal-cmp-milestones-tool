@@ -402,15 +402,15 @@ export class OpalToolFunction extends Function {
   }
   private async excelLookupMerge(parameters: any, authData: OptiAuthData) {
     const {
-      file1_id,
-      file2_id,
+      excel_file1_id,
+      excel_file2_id,
       file1_match_column,
       file2_match_column,
       append_columns
     } = parameters;
 
-    if (!file1_id) throw new Error('file1_id is required');
-    if (!file2_id) throw new Error('file2_id is required');
+    if (!excel_file1_id) throw new Error('excel_file1_id is required');
+    if (!excel_file2_id) throw new Error('excel_file2_id is required');
 
     const headers = {
       Authorization: `Bearer ${authData.credentials.access_token}`,
@@ -423,8 +423,8 @@ export class OpalToolFunction extends Function {
 
       logger.info('Downloading files from Opal backend');
 
-      const file1Buffer = await this.downloadOpalFile(file1_id, headers);
-      const file2Buffer = await this.downloadOpalFile(file2_id, headers);
+      const file1Buffer = await this.downloadOpalFile(excel_file1_id, headers);
+      const file2Buffer = await this.downloadOpalFile(excel_file2_id, headers);
 
       const resultBuffer = this.dynamicLookupExcel(
         file1Buffer,
