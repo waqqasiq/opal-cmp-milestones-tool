@@ -11,6 +11,9 @@ export declare class OpalToolFunction extends Function {
      * Add your logic here to handle every tool declared in the discoveryPayload.
      */
     perform(): Promise<Response>;
+    private excelLookupMerge;
+    private downloadOpalFile;
+    private dynamicLookupExcel;
     private extractAuthData;
     private extractParameters;
     private createMilestoneWithinCampaign;

@@ -211,6 +211,51 @@ const discoveryPayload = {
                     required: true
                 }
             ]
+        },
+        {
+            name: 'excel_lookup_merge',
+            description: 'Lookup values from Excel File1 into Excel File2 and append selected columns',
+            parameters: [
+                {
+                    name: 'excel_file1_id',
+                    type: 'string',
+                    description: 'Opal file ID of Excel File1 (lookup source)',
+                    required: true
+                },
+                {
+                    name: 'excel_file2_id',
+                    type: 'string',
+                    description: 'Opal file ID of Excel File2 (target file)',
+                    required: true
+                },
+                {
+                    name: 'file1_match_column',
+                    type: 'string',
+                    description: 'Column name in Excel File1 used for lookup',
+                    required: true
+                },
+                {
+                    name: 'file2_match_column',
+                    type: 'string',
+                    description: 'Column name in Excel File2 used for lookup',
+                    required: true
+                },
+                {
+                    name: 'append_columns',
+                    type: 'array',
+                    description: 'Columns from Excel File1 to append into Excel File2',
+                    required: true
+                }
+            ],
+            endpoint: '/tools/excel-lookup-merge',
+            http_method: 'POST',
+            auth_requirements: [
+                {
+                    provider: 'OptiID',
+                    scope_bundle: 'default',
+                    required: true
+                }
+            ]
         }
     ]
 };
@@ -283,9 +328,85 @@ class OpalToolFunction extends app_sdk_1.Function {
             const response = await this.generateEventDeckFromExcel(params, authData);
             return new app_sdk_1.Response(200, response);
         }
+        else if (this.request.path === '/tools/excel-lookup-merge') {
+            const params = this.extractParameters();
+            const authData = this.extractAuthData();
+            const response = await this.excelLookupMerge(params, authData);
+            return new app_sdk_1.Response(200, response);
+        }
         else {
             return new app_sdk_1.Response(400, 'Invalid path');
         }
+    }
+    async excelLookupMerge(parameters, authData) {
+        const { file1_id, file2_id, file1_match_column, file2_match_column, append_columns } = parameters;
+        if (!file1_id)
+            throw new Error('file1_id is required');
+        if (!file2_id)
+            throw new Error('file2_id is required');
+        const headers = {
+            Authorization: `Bearer ${authData.credentials.access_token}`,
+            'x-instance-id': authData.credentials.instance_id,
+            'x-product-sku': authData.credentials.product_sku,
+            'x-request-id': Date.now().toString()
+        };
+        try {
+            app_sdk_1.logger.info('Downloading files from Opal backend');
+            const file1Buffer = await this.downloadOpalFile(file1_id, headers);
+            const file2Buffer = await this.downloadOpalFile(file2_id, headers);
+            const resultBuffer = this.dynamicLookupExcel(file1Buffer, file2Buffer, file1_match_column, file2_match_column, append_columns);
+            return {
+                message: 'Lookup completed successfully',
+                result_file_base64: resultBuffer.toString('base64')
+            };
+        }
+        catch (error) {
+            app_sdk_1.logger.error('Excel lookup failed', error.message);
+            throw new Error('Excel lookup failed');
+        }
+    }
+    async downloadOpalFile(fileId, headers) {
+        const url = `https://opal-backend.optimizely.com/v1/file/${fileId}`;
+        const response = await axios_1.default.get(url, {
+            headers,
+            responseType: 'arraybuffer'
+        });
+        return Buffer.from(response.data);
+    }
+    dynamicLookupExcel(file1Buffer, file2Buffer, file1MatchCol, file2MatchCol, appendColumns) {
+        const wb1 = xlsx_1.default.read(file1Buffer, { type: 'buffer' });
+        const wb2 = xlsx_1.default.read(file2Buffer, { type: 'buffer' });
+        const sheet1 = wb1.SheetNames[0];
+        const sheet2 = wb2.SheetNames[0];
+        const file1 = xlsx_1.default.utils.sheet_to_json(wb1.Sheets[sheet1]);
+        const file2 = xlsx_1.default.utils.sheet_to_json(wb2.Sheets[sheet2]);
+        if (!file1.length || !file2.length) {
+            throw new Error('One of the Excel files is empty');
+        }
+        const lookupMap = new Map();
+        for (const row of file1) {
+            const key = row[file1MatchCol];
+            if (!lookupMap.has(key)) {
+                lookupMap.set(key, row);
+            }
+        }
+        const updated = file2.map(row => {
+            const key = row[file2MatchCol];
+            const match = lookupMap.get(key);
+            if (match) {
+                appendColumns.forEach(col => {
+                    row[col] = match[col];
+                });
+            }
+            return row;
+        });
+        const newSheet = xlsx_1.default.utils.json_to_sheet(updated);
+        const newWorkbook = xlsx_1.default.utils.book_new();
+        xlsx_1.default.utils.book_append_sheet(newWorkbook, newSheet, 'Result');
+        return xlsx_1.default.write(newWorkbook, {
+            type: 'buffer',
+            bookType: 'xlsx'
+        });
     }
     extractAuthData() {
         // Extract auth data from the request headers

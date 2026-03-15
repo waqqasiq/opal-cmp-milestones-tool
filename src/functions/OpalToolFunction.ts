@@ -396,7 +396,7 @@ export class OpalToolFunction extends Function {
 
       const response = await this.excelLookupMerge(params, authData);
       return new Response(200, response);
-    }else {
+    } else {
       return new Response(400, 'Invalid path');
     }
   }
@@ -488,13 +488,13 @@ export class OpalToolFunction extends Function {
       }
     }
 
-    const updated = file2.map(row => {
+    const updated = file2.map((row) => {
 
       const key = row[file2MatchCol];
       const match = lookupMap.get(key);
 
       if (match) {
-        appendColumns.forEach(col => {
+        appendColumns.forEach((col) => {
           row[col] = match[col];
         });
       }
