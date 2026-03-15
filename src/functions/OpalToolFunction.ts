@@ -64,7 +64,7 @@ interface ExcelLookupParams {
   excel_file2_id: string;
   file1_match_column: string;
   file2_match_column: string;
-  append_columns: Array<string>;
+  append_columns: string[];
 }
 
 function toIsoUtc(dateString: string): string {
@@ -379,7 +379,8 @@ const discoveryPayload = {
     },
     {
       name: 'excel_lookup_to_csv_file',
-      description: 'Perform a lookup merge between two Excel files and return a CSV file payload ready for write_content_to_file.',
+      description: `Perform a lookup merge between two Excel files and return a 
+      CSV file payload ready for write_content_to_file.`,
       parameters: [
         {
           name: 'excel_file1_id',

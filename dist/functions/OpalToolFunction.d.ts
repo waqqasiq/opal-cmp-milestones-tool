@@ -13,6 +13,7 @@ export declare class OpalToolFunction extends Function {
     perform(): Promise<Response>;
     private excelLookupMerge;
     private csvMergeLookup;
+    private excelLookupToCsvFile;
     private downloadOpalFile;
     private dynamicLookupExcel;
     private extractAuthData;
