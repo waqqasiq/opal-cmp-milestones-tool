@@ -316,7 +316,8 @@ const discoveryPayload = {
         },
         {
             name: 'excel_lookup_to_csv_file',
-            description: 'Perform a lookup merge between two Excel files and return a CSV file payload ready for write_content_to_file.',
+            description: `Perform a lookup merge between two Excel files and return a 
+      CSV file payload ready for write_content_to_file.`,
             parameters: [
                 {
                     name: 'excel_file1_id',

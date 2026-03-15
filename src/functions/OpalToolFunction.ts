@@ -91,6 +91,7 @@ function safeCellValue(value: unknown): string {
   return '';
 }
 
+
 // Define Opal tool metadata  - list of tools and their parameters
 const discoveryPayload = {
   'functions': [
@@ -755,7 +756,7 @@ export class OpalToolFunction extends Function {
 
       for (const row of sheet1) {
 
-        const key = String(row[file1_match_column] ?? '').trim();
+        const key = safeCellValue(row[file1_match_column]);
 
         if (key) {
           lookupMap.set(key, row);
@@ -766,7 +767,7 @@ export class OpalToolFunction extends Function {
 
       for (const row of sheet2) {
 
-        const key = String(row[file2_match_column] ?? '').trim();
+        const key = safeCellValue(row[file2_match_column]);
         const match = lookupMap.get(key);
 
         const mergedRow = { ...row };
