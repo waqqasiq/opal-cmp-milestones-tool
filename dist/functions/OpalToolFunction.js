@@ -17,6 +17,17 @@ function toIsoUtc(dateString) {
     }
     return date.toISOString(); // Always outputs: 2025-11-24T13:15:30.000Z
 }
+function safeCellValue(value) {
+    if (value === null || value === undefined)
+        return '';
+    if (typeof value === 'string') {
+        return value.trim();
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+    return '';
+}
 // Define Opal tool metadata  - list of tools and their parameters
 const discoveryPayload = {
     'functions': [
@@ -390,64 +401,6 @@ class OpalToolFunction extends app_sdk_1.Function {
             return new app_sdk_1.Response(400, 'Invalid path');
         }
     }
-    async csvMergeLookup(parameters, authData) {
-        const { excel_file1_id, excel_file2_id, file1_match_column, file2_match_column, append_columns } = parameters;
-        try {
-            if (!excel_file1_id)
-                throw new Error('excel_file1_id is required');
-            if (!excel_file2_id)
-                throw new Error('excel_file2_id is required');
-            // Fetch both CSV files from Opal File Service
-            const file1 = await axios_1.default.get(`https://opal-backend.optimizely.com/v1/file/${excel_file1_id}`, {
-                headers: {
-                    Authorization: `Bearer ${authData.credentials.access_token}`
-                }
-            });
-            const file2 = await axios_1.default.get(`https://opal-backend.optimizely.com/v1/file/${excel_file2_id}`, {
-                headers: {
-                    Authorization: `Bearer ${authData.credentials.access_token}`
-                }
-            });
-            const csv1 = file1.data;
-            const csv2 = file2.data;
-            const workbook1 = xlsx_1.default.read(csv1, { type: 'string' });
-            const workbook2 = xlsx_1.default.read(csv2, { type: 'string' });
-            const sheet1 = xlsx_1.default.utils.sheet_to_json(workbook1.Sheets[workbook1.SheetNames[0]]);
-            const sheet2 = xlsx_1.default.utils.sheet_to_json(workbook2.Sheets[workbook2.SheetNames[0]]);
-            // Build lookup map
-            const lookupMap = {};
-            for (const row of sheet1) {
-                lookupMap[row[file1_match_column]] = row;
-            }
-            // Merge rows
-            const mergedRows = sheet2.map((row) => {
-                const key = row[file2_match_column];
-                const match = lookupMap[key];
-                if (match) {
-                    append_columns.forEach((col) => {
-                        var _a;
-                        row[col] = (_a = match[col]) !== null && _a !== void 0 ? _a : '';
-                    });
-                }
-                else {
-                    append_columns.forEach((col) => {
-                        row[col] = '';
-                    });
-                }
-                return row;
-            });
-            const resultSheet = xlsx_1.default.utils.json_to_sheet(mergedRows);
-            const csvOutput = xlsx_1.default.utils.sheet_to_csv(resultSheet);
-            return {
-                message: 'Lookup completed successfully',
-                csv_content: csvOutput
-            };
-        }
-        catch (error) {
-            app_sdk_1.logger.error('CSV lookup merge failed:', error.message);
-            throw new Error('Failed to merge CSV files');
-        }
-    }
     async excelLookupMerge(parameters, authData) {
         const { excel_file1_id, excel_file2_id, file1_match_column, file2_match_column, append_columns } = parameters;
         if (!excel_file1_id)
@@ -473,6 +426,79 @@ class OpalToolFunction extends app_sdk_1.Function {
         catch (error) {
             app_sdk_1.logger.error('Excel lookup failed', error.message);
             throw new Error('Excel lookup failed');
+        }
+    }
+    async csvMergeLookup(parameters, authData) {
+        var _a;
+        const { excel_file1_id, excel_file2_id, file1_match_column, file2_match_column, append_columns } = parameters;
+        try {
+            if (!excel_file1_id) {
+                throw new Error('excel_file1_id is required');
+            }
+            if (!excel_file2_id) {
+                throw new Error('excel_file2_id is required');
+            }
+            app_sdk_1.logger.info('Fetching CSV files from Opal File Service');
+            const file1Response = await axios_1.default.get(`https://opal-backend.optimizely.com/v1/file/${excel_file1_id}`, {
+                headers: {
+                    Authorization: `Bearer ${authData.credentials.access_token}`
+                }
+            });
+            const file2Response = await axios_1.default.get(`https://opal-backend.optimizely.com/v1/file/${excel_file2_id}`, {
+                headers: {
+                    Authorization: `Bearer ${authData.credentials.access_token}`
+                }
+            });
+            const csv1 = file1Response.data;
+            const csv2 = file2Response.data;
+            app_sdk_1.logger.info('Parsing CSV files');
+            const workbook1 = xlsx_1.default.read(csv1, { type: 'string' });
+            const workbook2 = xlsx_1.default.read(csv2, { type: 'string' });
+            const sheet1 = xlsx_1.default.utils.sheet_to_json(workbook1.Sheets[workbook1.SheetNames[0]]);
+            const sheet2 = xlsx_1.default.utils.sheet_to_json(workbook2.Sheets[workbook2.SheetNames[0]]);
+            app_sdk_1.logger.info(`File1 rows: ${sheet1.length}`);
+            app_sdk_1.logger.info(`File2 rows: ${sheet2.length}`);
+            const lookupMap = new Map();
+            for (const row of sheet1) {
+                const key = safeCellValue(row[file1_match_column]);
+                if (key) {
+                    lookupMap.set(key, row);
+                }
+            }
+            app_sdk_1.logger.info(`Lookup map built with ${lookupMap.size} entries`);
+            const mergedRows = [];
+            for (const row of sheet2) {
+                const key = safeCellValue(row[file2_match_column]);
+                const match = lookupMap.get(key);
+                const mergedRow = { ...row };
+                if (match) {
+                    for (const column of append_columns) {
+                        mergedRow[column] = (_a = match[column]) !== null && _a !== void 0 ? _a : '';
+                    }
+                }
+                else {
+                    for (const column of append_columns) {
+                        mergedRow[column] = '';
+                    }
+                }
+                mergedRows.push(mergedRow);
+            }
+            app_sdk_1.logger.info('CSV merge complete');
+            const resultSheet = xlsx_1.default.utils.json_to_sheet(mergedRows);
+            const csvOutput = xlsx_1.default.utils.sheet_to_csv(resultSheet);
+            return {
+                message: 'Lookup completed successfully',
+                csv_content: csvOutput
+            };
+        }
+        catch (error) {
+            if (error instanceof Error) {
+                app_sdk_1.logger.error('CSV lookup merge failed:', error.message);
+            }
+            else {
+                app_sdk_1.logger.error('CSV lookup merge failed with unknown error');
+            }
+            throw new Error('Failed to merge CSV files');
         }
     }
     async downloadOpalFile(fileId, headers) {

@@ -69,6 +69,20 @@ function toIsoUtc(dateString: string): string {
   return date.toISOString(); // Always outputs: 2025-11-24T13:15:30.000Z
 }
 
+function safeCellValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  return '';
+}
+
 // Define Opal tool metadata  - list of tools and their parameters
 const discoveryPayload = {
   'functions': [
@@ -568,11 +582,11 @@ export class OpalToolFunction extends Function {
       logger.info(`File1 rows: ${sheet1.length}`);
       logger.info(`File2 rows: ${sheet2.length}`);
 
-      // Build lookup map (fast)
       const lookupMap = new Map<string, Record<string, unknown>>();
 
       for (const row of sheet1) {
-        const key = String(row[file1_match_column] ?? '').trim();
+
+        const key = safeCellValue(row[file1_match_column]);
 
         if (key) {
           lookupMap.set(key, row);
@@ -581,11 +595,11 @@ export class OpalToolFunction extends Function {
 
       logger.info(`Lookup map built with ${lookupMap.size} entries`);
 
-      const mergedRows: Record<string, unknown>[] = [];
+      const mergedRows: Array<Record<string, unknown>> = [];
 
       for (const row of sheet2) {
 
-        const key = String(row[file2_match_column] ?? '').trim();
+        const key = safeCellValue(row[file2_match_column]);
         const match = lookupMap.get(key);
 
         const mergedRow: Record<string, unknown> = { ...row };
