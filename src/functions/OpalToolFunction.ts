@@ -59,6 +59,14 @@ interface CsvMergeLookupParams {
   append_columns: string[];
 }
 
+interface ExcelLookupParams {
+  excel_file1_id: string;
+  excel_file2_id: string;
+  file1_match_column: string;
+  file2_match_column: string;
+  append_columns: Array<string>;
+}
+
 function toIsoUtc(dateString: string): string {
   const date = new Date(dateString);
 
@@ -368,6 +376,51 @@ const discoveryPayload = {
           required: true
         }
       ]
+    },
+    {
+      name: 'excel_lookup_to_csv_file',
+      description: 'Perform a lookup merge between two Excel files and return a CSV file payload ready for write_content_to_file.',
+      parameters: [
+        {
+          name: 'excel_file1_id',
+          type: 'string',
+          description: 'File ID of the source Excel file',
+          required: true
+        },
+        {
+          name: 'excel_file2_id',
+          type: 'string',
+          description: 'File ID of the target Excel file',
+          required: true
+        },
+        {
+          name: 'file1_match_column',
+          type: 'string',
+          description: 'Column in File1 used for matching',
+          required: true
+        },
+        {
+          name: 'file2_match_column',
+          type: 'string',
+          description: 'Column in File2 used for matching',
+          required: true
+        },
+        {
+          name: 'append_columns',
+          type: 'array',
+          description: 'Columns from File1 to append to File2',
+          required: true
+        }
+      ],
+      endpoint: '/tools/excel-lookup-to-csv-file',
+      http_method: 'POST',
+      auth_requirements: [
+        {
+          provider: 'OptiID',
+          scope_bundle: 'default',
+          required: true
+        }
+      ]
     }
   ]
 };
@@ -468,6 +521,14 @@ export class OpalToolFunction extends Function {
       const authData = this.extractAuthData() as OptiAuthData;
 
       const response = await this.csvMergeLookup(params, authData);
+
+      return new Response(200, response);
+    } else if (this.request.path === '/tools/excel-lookup-to-csv-file') {
+
+      const params = this.extractParameters();
+      const authData = this.extractAuthData() as OptiAuthData;
+
+      const response = await this.excelLookupToCsvFile(params, authData);
 
       return new Response(200, response);
     } else {
@@ -640,6 +701,108 @@ export class OpalToolFunction extends Function {
       }
 
       throw new Error('Failed to merge CSV files');
+    }
+  }
+
+  private async excelLookupToCsvFile(
+    parameters: ExcelLookupParams,
+    authData: OptiAuthData
+  ) {
+
+    const {
+      excel_file1_id,
+      excel_file2_id,
+      file1_match_column,
+      file2_match_column,
+      append_columns
+    } = parameters;
+
+    try {
+
+      const file1Response = await axios.get<ArrayBuffer>(
+        `https://opal-backend.optimizely.com/v1/file/${excel_file1_id}`,
+        {
+          responseType: 'arraybuffer',
+          headers: {
+            Authorization: `Bearer ${authData.credentials.access_token}`
+          }
+        }
+      );
+
+      const file2Response = await axios.get<ArrayBuffer>(
+        `https://opal-backend.optimizely.com/v1/file/${excel_file2_id}`,
+        {
+          responseType: 'arraybuffer',
+          headers: {
+            Authorization: `Bearer ${authData.credentials.access_token}`
+          }
+        }
+      );
+
+      const workbook1 = xlsx.read(file1Response.data, { type: 'buffer' });
+      const workbook2 = xlsx.read(file2Response.data, { type: 'buffer' });
+
+      const sheet1 = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+        workbook1.Sheets[workbook1.SheetNames[0]]
+      );
+
+      const sheet2 = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+        workbook2.Sheets[workbook2.SheetNames[0]]
+      );
+
+      const lookupMap = new Map<string, Record<string, unknown>>();
+
+      for (const row of sheet1) {
+
+        const key = String(row[file1_match_column] ?? '').trim();
+
+        if (key) {
+          lookupMap.set(key, row);
+        }
+      }
+
+      const mergedRows: Array<Record<string, unknown>> = [];
+
+      for (const row of sheet2) {
+
+        const key = String(row[file2_match_column] ?? '').trim();
+        const match = lookupMap.get(key);
+
+        const mergedRow = { ...row };
+
+        if (match) {
+
+          for (const column of append_columns) {
+            mergedRow[column] = match[column] ?? '';
+          }
+
+        } else {
+
+          for (const column of append_columns) {
+            mergedRow[column] = '';
+          }
+
+        }
+
+        mergedRows.push(mergedRow);
+      }
+
+      const resultSheet = xlsx.utils.json_to_sheet(mergedRows);
+      const csvOutput = xlsx.utils.sheet_to_csv(resultSheet);
+
+      return {
+        filename: 'lookup_result.csv',
+        content: csvOutput,
+        content_type: 'text/csv'
+      };
+
+    } catch (error: unknown) {
+
+      if (error instanceof Error) {
+        logger.error('Excel lookup merge failed:', error.message);
+      }
+
+      throw new Error('Failed to process Excel lookup merge');
     }
   }
 
