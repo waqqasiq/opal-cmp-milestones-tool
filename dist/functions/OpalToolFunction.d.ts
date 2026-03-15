@@ -14,4 +14,13 @@ export declare class OpalToolFunction extends Function {
     private extractAuthData;
     private extractParameters;
     private createMilestoneWithinCampaign;
+    private updateMilestoneWithinCampaign;
+    private getChildCampaigns;
+    private getCampaignTasks;
+    private getMilestonesWithinCampaign;
+    private generateEventDeckFromExcel;
+    private buildSlidesJson;
+    private extractFirst;
+    private getEventCategory;
+    private downloadFileAsBuffer;
 }

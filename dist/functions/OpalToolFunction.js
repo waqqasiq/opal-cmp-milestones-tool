@@ -1,9 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OpalToolFunction = void 0;
 const app_sdk_1 = require("@zaiusinc/app-sdk");
 // import { AuthSection } from '../data/data';
 // import { parseExcelFromCmp } from 'OpalToolExcelParse.ts';
+const xlsx_1 = __importDefault(require("xlsx"));
+const axios_1 = __importDefault(require("axios"));
 const cmp_1 = require("../cmp");
 function toIsoUtc(dateString) {
     const date = new Date(dateString);
@@ -65,6 +70,147 @@ const discoveryPayload = {
                     'required': true
                 }
             ]
+        },
+        {
+            'name': 'update_milestone_within_campaign',
+            'description': 'Update a milestone inside a CMP campaign',
+            'parameters': [
+                {
+                    'name': 'id',
+                    'type': 'string',
+                    'description': 'The milestone ID to update',
+                    'required': true
+                },
+                {
+                    'name': 'title',
+                    'type': 'string',
+                    'description': 'Updated title (1–80 chars)',
+                    'required': false
+                },
+                {
+                    'name': 'description',
+                    'type': 'string',
+                    'description': 'Updated description (1–250 chars)',
+                    'required': false
+                },
+                {
+                    'name': 'campaign_id',
+                    'type': 'string',
+                    'description': 'Campaign ID to associate with this milestone',
+                    'required': true
+                },
+                {
+                    'name': 'due_date',
+                    'type': 'string',
+                    'description': 'Updated ISO 8601 UTC due date',
+                    'required': false
+                },
+                {
+                    'name': 'hex_color',
+                    'type': 'string',
+                    'description': 'Updated hex color code',
+                    'required': false
+                },
+                {
+                    'name': 'tasks',
+                    'type': 'array',
+                    'description': 'List of task objects [{ id: string }]',
+                    'required': true
+                }
+            ],
+            'endpoint': '/tools/update-milestone-within-campaign',
+            'http_method': 'PATCH',
+            'auth_requirements': [
+                {
+                    'provider': 'OptiID',
+                    'scope_bundle': 'default',
+                    'required': true
+                }
+            ]
+        },
+        {
+            name: 'get_child_campaigns',
+            description: 'Fetch a campaign and recursively retrieve all child/sub-campaigns',
+            parameters: [
+                {
+                    name: 'campaign_id',
+                    type: 'string',
+                    description: 'Root CMP campaign ID',
+                    required: true
+                }
+            ],
+            endpoint: '/tools/get-child-campaigns',
+            http_method: 'POST',
+            auth_requirements: [
+                {
+                    provider: 'OptiID',
+                    scope_bundle: 'default',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'get_campaign_tasks',
+            description: 'Fetch all tasks under a CMP campaign (paginated)',
+            parameters: [
+                {
+                    name: 'campaign_id',
+                    type: 'string',
+                    description: 'CMP campaign ID',
+                    required: true
+                }
+            ],
+            endpoint: '/tools/get-campaign-tasks',
+            http_method: 'POST',
+            auth_requirements: [
+                {
+                    provider: 'OptiID',
+                    scope_bundle: 'default',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'get_milestones_within_campaign',
+            description: 'Fetch all milestones within a CMP campaign',
+            parameters: [
+                {
+                    name: 'campaign_id',
+                    type: 'string',
+                    description: 'CMP campaign ID',
+                    required: true
+                }
+            ],
+            endpoint: '/tools/get-milestones-within-campaign',
+            http_method: 'POST',
+            auth_requirements: [
+                {
+                    provider: 'OptiID',
+                    scope_bundle: 'default',
+                    required: true
+                }
+            ]
+        },
+        {
+            name: 'generate_event_deck_from_excel',
+            description: 'Generate Q1 event slides JSON from CMP Excel asset',
+            parameters: [
+                {
+                    name: 'asset_id',
+                    type: 'string',
+                    description: 'CMP Excel asset ID',
+                    required: true
+                }
+            ],
+            endpoint: '/tools/generate-event-deck-from-excel',
+            http_method: 'POST',
+            auth_requirements: [
+                {
+                    provider: 'OptiID',
+                    scope_bundle: 'default',
+                    required: true
+                }
+            ]
         }
     ]
 };
@@ -105,6 +251,36 @@ class OpalToolFunction extends app_sdk_1.Function {
             const params = this.extractParameters();
             const authData = this.extractAuthData();
             const response = await this.createMilestoneWithinCampaign(params, authData);
+            return new app_sdk_1.Response(200, response);
+        }
+        else if (this.request.path === '/tools/update-milestone-within-campaign') {
+            const params = this.extractParameters();
+            const authData = this.extractAuthData();
+            const response = await this.updateMilestoneWithinCampaign(params, authData);
+            return new app_sdk_1.Response(200, response);
+        }
+        else if (this.request.path === '/tools/get-child-campaigns') {
+            const params = this.extractParameters();
+            const authData = this.extractAuthData();
+            const response = await this.getChildCampaigns(params, authData);
+            return new app_sdk_1.Response(200, response);
+        }
+        else if (this.request.path === '/tools/get-campaign-tasks') {
+            const params = this.extractParameters();
+            const authData = this.extractAuthData();
+            const response = await this.getCampaignTasks(params, authData);
+            return new app_sdk_1.Response(200, response);
+        }
+        else if (this.request.path === '/tools/get-milestones-within-campaign') {
+            const params = this.extractParameters();
+            const authData = this.extractAuthData();
+            const response = await this.getMilestonesWithinCampaign(params, authData);
+            return new app_sdk_1.Response(200, response);
+        }
+        else if (this.request.path === '/tools/generate-event-deck-from-excel') {
+            const params = this.extractParameters();
+            const authData = this.extractAuthData();
+            const response = await this.generateEventDeckFromExcel(params, authData);
             return new app_sdk_1.Response(200, response);
         }
         else {
@@ -163,6 +339,196 @@ class OpalToolFunction extends app_sdk_1.Function {
             console.error('Error creating milestone:', error.message);
             throw new Error('Failed to create milestone in CMP');
         }
+    }
+    async updateMilestoneWithinCampaign(parameters, authData) {
+        const { id, title, description, campaign_id, hex_color, tasks } = parameters;
+        let { due_date } = parameters;
+        try {
+            if (!id)
+                throw new Error('Milestone "id" is required');
+            if (!campaign_id)
+                throw new Error('"campaign_id" is required');
+            if (!tasks)
+                throw new Error('"tasks" is required and must be an array');
+            if (due_date) {
+                due_date = toIsoUtc(due_date);
+            }
+            const payload = {
+                ...(title && { title }),
+                ...(description !== undefined && { description }),
+                campaign_id,
+                ...(due_date && { due_date }),
+                ...(hex_color && { hex_color }),
+                tasks // required
+            };
+            app_sdk_1.logger.info('Updating milestone with payload:', payload);
+            const result = await (0, cmp_1.updateMilestoneWithinCampaign)(id, payload, authData);
+            return { milestone: result };
+        }
+        catch (error) {
+            console.error('Error updating milestone:', error.message);
+            throw new Error('Failed to update milestone in CMP');
+        }
+    }
+    async getChildCampaigns(parameters, authData) {
+        const { campaign_id } = parameters;
+        if (!campaign_id) {
+            throw new Error('campaign_id is required');
+        }
+        try {
+            const tree = await (0, cmp_1.getCampaignTree)(campaign_id, authData);
+            return tree;
+        }
+        catch (error) {
+            app_sdk_1.logger.error('Error fetching child campaigns:', error.message);
+            throw new Error('Failed to fetch child campaigns from CMP');
+        }
+    }
+    async getCampaignTasks(parameters, authData) {
+        const { campaign_id } = parameters;
+        console.log('[Opal][getCampaignTasks] Params:', parameters);
+        console.log('[Opal][getCampaignTasks] Auth org_sso_id:', authData.credentials.org_sso_id);
+        if (!campaign_id) {
+            throw new Error('campaign_id is required');
+        }
+        try {
+            const tasks = await (0, cmp_1.getAllTasksForCampaign)(campaign_id, authData);
+            console.log('[Opal][getCampaignTasks] Returning tasks:', tasks.length);
+            return { tasks };
+        }
+        catch (error) {
+            app_sdk_1.logger.error('Error fetching campaign tasks:', error.message);
+            throw new Error('Failed to fetch campaign tasks from CMP');
+        }
+    }
+    async getMilestonesWithinCampaign(parameters, authData) {
+        const { campaign_id } = parameters;
+        if (!campaign_id) {
+            throw new Error('campaign_id is required');
+        }
+        try {
+            const milestones = await (0, cmp_1.getMilestonesWithinCampaign)(campaign_id, authData);
+            return { milestones };
+        }
+        catch (error) {
+            app_sdk_1.logger.error('Error fetching milestones:', error.message);
+            throw new Error('Failed to fetch milestones from CMP');
+        }
+    }
+    async generateEventDeckFromExcel(parameters, authData) {
+        var _a, _b;
+        var _c, _d, _e;
+        const { asset_id } = parameters;
+        if (!asset_id) {
+            throw new Error('asset_id is required');
+        }
+        const assetDetails = await (0, cmp_1.getAssetFromCMP)(asset_id, authData);
+        const buffer = await this.downloadFileAsBuffer(assetDetails.url);
+        const workbook = xlsx_1.default.read(buffer, { cellDates: true });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        if (!sheet) {
+            throw new Error('No worksheet found in Excel');
+        }
+        const rows = xlsx_1.default.utils.sheet_to_json(sheet, {
+            range: 10,
+            defval: ''
+        });
+        const MONTHS_IN_SCOPE = ['January', 'February', 'March'];
+        const ALLOWED_LOBS = new Set([
+            'Asset Management & Private Equity',
+            'Products',
+            'Government & Healthcare',
+            'Financial Services',
+            'Other'
+        ]);
+        const normalized = rows.flatMap((row) => {
+            if (!row['Event Begin Date'] || !row['LOB Description'] || !row['Title']) {
+                return [];
+            }
+            const start = new Date(row['Event Begin Date']);
+            if (isNaN(start.getTime())) {
+                return [];
+            }
+            const month = start.toLocaleString('en-US', { month: 'long' });
+            if (!MONTHS_IN_SCOPE.includes(month)) {
+                return [];
+            }
+            const lobs = String(row['LOB Description'])
+                .split(',')
+                .map((l) => l.trim())
+                .filter((l) => ALLOWED_LOBS.has(l));
+            if (!lobs.length) {
+                return [];
+            }
+            const isMultiLob = lobs.length > 1;
+            return lobs.map((lob) => ({
+                month,
+                lob,
+                category: this.getEventCategory(row['Event Type'] || ''),
+                title: row['Title'],
+                date: start.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric'
+                }),
+                stakeholder: this.extractFirst(row['Business Stakeholder']),
+                city: this.extractFirst(row['Business Area']),
+                isMultiLob
+            }));
+        });
+        const grouped = {};
+        for (const e of normalized) {
+            (_a = grouped[_c = e.month]) !== null && _a !== void 0 ? _a : (grouped[_c] = {});
+            (_b = (_d = grouped[e.month])[_e = e.lob]) !== null && _b !== void 0 ? _b : (_d[_e] = { 'in-person': [], online: [] });
+            grouped[e.month][e.lob][e.category].push(e);
+        }
+        const slides = this.buildSlidesJson(grouped);
+        return { slides };
+    }
+    buildSlidesJson(grouped) {
+        const slides = [];
+        for (const month of Object.keys(grouped)) {
+            for (const lob of Object.keys(grouped[month])) {
+                const inPerson = grouped[month][lob]['in-person'].map((e) => ({
+                    title: e.title,
+                    date: e.date,
+                    stakeholder: e.stakeholder,
+                    city: e.city,
+                    isMultiLob: e.isMultiLob
+                }));
+                const online = grouped[month][lob].online.map((e) => ({
+                    title: e.title,
+                    date: e.date,
+                    stakeholder: e.stakeholder,
+                    city: e.city,
+                    isMultiLob: e.isMultiLob
+                }));
+                slides.push({
+                    month,
+                    lob,
+                    legend: 'Italicized event – Event is aligned to more than one LOB',
+                    inPerson,
+                    online
+                });
+            }
+        }
+        return slides;
+    }
+    extractFirst(value) {
+        return (String(value || '')
+            .split(/[,;]/)
+            .map((v) => v.trim())
+            .filter(Boolean)[0] || '—');
+    }
+    getEventCategory(eventType = '') {
+        const v = eventType.toLowerCase();
+        if (v.includes('online') || v.includes('webcast') || v.includes('virtual')) {
+            return 'online';
+        }
+        return 'in-person';
+    }
+    async downloadFileAsBuffer(url) {
+        const res = await axios_1.default.get(url, { responseType: 'arraybuffer' });
+        return Buffer.from(res.data);
     }
 }
 exports.OpalToolFunction = OpalToolFunction;
