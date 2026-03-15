@@ -390,11 +390,11 @@ class OpalToolFunction extends app_sdk_1.Function {
                 lookupMap.set(key, row);
             }
         }
-        const updated = file2.map(row => {
+        const updated = file2.map((row) => {
             const key = row[file2MatchCol];
             const match = lookupMap.get(key);
             if (match) {
-                appendColumns.forEach(col => {
+                appendColumns.forEach((col) => {
                     row[col] = match[col];
                 });
             }

@@ -401,7 +401,6 @@ export class OpalToolFunction extends Function {
     }
   }
   private async excelLookupMerge(parameters: any, authData: OptiAuthData) {
-
     const {
       file1_id,
       file2_id,
