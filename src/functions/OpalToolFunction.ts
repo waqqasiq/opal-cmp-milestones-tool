@@ -77,18 +77,23 @@ function toIsoUtc(dateString: string): string {
   return date.toISOString(); // Always outputs: 2025-11-24T13:15:30.000Z
 }
 
-function safeCellValue(value: unknown): string {
+function safeCellValue(value: unknown): string { // updated to normalize case - march 23 2026
   if (value === null || value === undefined) return '';
 
   if (typeof value === 'string') {
-    return value.trim();
+    return value.trim().toLowerCase(); // normalize case
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
 
-  return '';
+  // Handle unexpected types (e.g., objects, dates)
+  try {
+    return String(value).trim().toLowerCase();
+  } catch {
+    return '';
+  }
 }
 
 
@@ -423,6 +428,47 @@ const discoveryPayload = {
           required: true
         }
       ]
+    },
+    {
+      name: 'excel_sumif_to_csv_file',
+      description: `Perform a SUMIF-style grouped aggregation on a single Excel file.
+      Groups rows by a specified column and appends a new column with the total sum 
+      of another column for each group.`,
+      parameters: [
+        {
+          name: 'excel_file_id',
+          type: 'string',
+          description: 'File ID of the Excel file (File3)',
+          required: true
+        },
+        {
+          name: 'group_column',
+          type: 'string',
+          description: 'Column used to group rows (e.g., Name or ID)',
+          required: true
+        },
+        {
+          name: 'sum_column',
+          type: 'string',
+          description: 'Column containing numeric values to sum (e.g., Amount / Pay rate)',
+          required: true
+        },
+        {
+          name: 'output_column_name',
+          type: 'string',
+          description: 'Name of the new column to store the aggregated sum (e.g., Total)',
+          required: true
+        }
+      ],
+      endpoint: '/tools/excel-sumif-to-csv-file',
+      http_method: 'POST',
+      auth_requirements: [
+        {
+          provider: 'OptiID',
+          scope_bundle: 'default',
+          required: true
+        }
+      ]
     }
   ]
 };
@@ -531,6 +577,14 @@ export class OpalToolFunction extends Function {
       const authData = this.extractAuthData() as OptiAuthData;
 
       const response = await this.excelLookupToCsvFile(params, authData);
+
+      return new Response(200, response);
+    } else if (this.request.path === '/tools/excel-sumif-to-csv-file') {
+
+      const params = this.extractParameters();
+      const authData = this.extractAuthData() as OptiAuthData;
+
+      const response = await this.excelSumifToCsvFile(params, authData);
 
       return new Response(200, response);
     } else {
@@ -706,7 +760,7 @@ export class OpalToolFunction extends Function {
     }
   }
 
-  private async excelLookupToCsvFile(
+  private async excelLookupToCsvFile( // tool 1 fp&a main function
     parameters: ExcelLookupParams,
     authData: OptiAuthData
   ) {
@@ -805,6 +859,96 @@ export class OpalToolFunction extends Function {
       }
 
       throw new Error('Failed to process Excel lookup merge');
+    }
+  }
+
+  private async excelSumifToCsvFile( // tool 2 fp&a main function
+    parameters: {
+      excel_file_id: string;
+      group_column: string;
+      sum_column: string;
+      output_column_name: string;
+    },
+    authData: OptiAuthData
+  ) {
+
+    const {
+      excel_file_id,
+      group_column,
+      sum_column,
+      output_column_name
+    } = parameters;
+
+    try {
+
+      // 🔹 STEP 1: Fetch file
+      const fileResponse = await axios.get<ArrayBuffer>(
+        `https://opal-backend.optimizely.com/v1/file/${excel_file_id}`,
+        {
+          responseType: 'arraybuffer',
+          headers: {
+            Authorization: `Bearer ${authData.credentials.access_token}`
+          }
+        }
+      );
+
+      // 🔹 STEP 2: Parse Excel
+      const workbook = xlsx.read(fileResponse.data, { type: 'buffer' });
+
+      const sheet = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+        workbook.Sheets[workbook.SheetNames[0]]
+      );
+
+      // 🔹 STEP 3: Build grouped totals
+      const groupedTotals = new Map<string, number>();
+
+      for (const row of sheet) {
+
+        const rawKey = row[group_column];
+        const key = safeCellValue(rawKey);
+
+        if (!key) continue;
+
+        const value = Number(row[sum_column]) || 0;
+
+        const currentTotal = groupedTotals.get(key) || 0;
+        groupedTotals.set(key, currentTotal + value);
+      }
+
+      // 🔹 STEP 4: Append totals back to each row
+      const updatedRows: Array<Record<string, unknown>> = [];
+
+      for (const row of sheet) {
+
+        const key = safeCellValue(row[group_column]);
+
+        const total = key ? groupedTotals.get(key) || 0 : 0;
+
+        const updatedRow = {
+          ...row,
+          [output_column_name]: total
+        };
+
+        updatedRows.push(updatedRow);
+      }
+
+      // 🔹 STEP 5: Convert to CSV
+      const resultSheet = xlsx.utils.json_to_sheet(updatedRows);
+      const csvOutput = xlsx.utils.sheet_to_csv(resultSheet);
+
+      return {
+        filename: 'sumif_result.csv',
+        content: csvOutput,
+        content_type: 'text/csv'
+      };
+
+    } catch (error: unknown) {
+
+      if (error instanceof Error) {
+        logger.error('Excel SUMIF failed:', error.message);
+      }
+
+      throw new Error('Failed to process Excel SUMIF');
     }
   }
 

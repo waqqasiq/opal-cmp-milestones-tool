@@ -554,7 +554,7 @@ class OpalToolFunction extends app_sdk_1.Function {
         }
     }
     async excelLookupToCsvFile(parameters, authData) {
-        var _a, _b, _c;
+        var _a;
         const { excel_file1_id, excel_file2_id, file1_match_column, file2_match_column, append_columns } = parameters;
         try {
             const file1Response = await axios_1.default.get(`https://opal-backend.optimizely.com/v1/file/${excel_file1_id}`, {
@@ -575,19 +575,19 @@ class OpalToolFunction extends app_sdk_1.Function {
             const sheet2 = xlsx_1.default.utils.sheet_to_json(workbook2.Sheets[workbook2.SheetNames[0]]);
             const lookupMap = new Map();
             for (const row of sheet1) {
-                const key = String((_a = row[file1_match_column]) !== null && _a !== void 0 ? _a : '').trim();
+                const key = safeCellValue(row[file1_match_column]);
                 if (key) {
                     lookupMap.set(key, row);
                 }
             }
             const mergedRows = [];
             for (const row of sheet2) {
-                const key = String((_b = row[file2_match_column]) !== null && _b !== void 0 ? _b : '').trim();
+                const key = safeCellValue(row[file2_match_column]);
                 const match = lookupMap.get(key);
                 const mergedRow = { ...row };
                 if (match) {
                     for (const column of append_columns) {
-                        mergedRow[column] = (_c = match[column]) !== null && _c !== void 0 ? _c : '';
+                        mergedRow[column] = (_a = match[column]) !== null && _a !== void 0 ? _a : '';
                     }
                 }
                 else {
