@@ -77,23 +77,24 @@ function toIsoUtc(dateString: string): string {
   return date.toISOString(); // Always outputs: 2025-11-24T13:15:30.000Z
 }
 
-function safeCellValue(value: unknown): string { // updated to normalize case - march 23 2026
+function safeCellValue(value: unknown): string {
   if (value === null || value === undefined) return '';
 
   if (typeof value === 'string') {
-    return value.trim().toLowerCase(); // normalize case
+    return value.trim().toLowerCase();
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
 
-  // Handle unexpected types (e.g., objects, dates)
-  try {
-    return String(value).trim().toLowerCase();
-  } catch {
-    return '';
+  // Explicitly handle Date (common from Excel)
+  if (value instanceof Date) {
+    return value.toISOString();
   }
+
+  // Avoid unsafe object stringification
+  return '';
 }
 
 
