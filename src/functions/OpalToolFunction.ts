@@ -67,6 +67,17 @@ interface ExcelLookupParams {
   append_columns: string[];
 }
 
+interface ExcelDualLookupParams {
+  main_file_id: string;
+  main_match_column: string;
+  lookup_file1_id: string;
+  lookup_file1_match_column: string;
+  lookup_file1_append_columns: string[];
+  lookup_file2_id: string;
+  lookup_file2_match_column: string;
+  lookup_file2_append_columns: string[];
+}
+
 function toIsoUtc(dateString: string): string {
   const date = new Date(dateString);
 
@@ -470,6 +481,71 @@ const discoveryPayload = {
           required: true
         }
       ]
+    },
+    {
+      name: 'excel_dual_lookup_to_csv_file',
+      description: `Perform a lookup merge between one main Excel file and two lookup Excel files.
+  Matches rows in the main file against each lookup file using the main file's ID column,
+  appending selected columns from both lookup files side-by-side into the output CSV.`,
+      parameters: [
+        {
+          name: 'main_file_id',
+          type: 'string',
+          description: 'File ID of the main (base) Excel file',
+          required: true
+        },
+        {
+          name: 'main_match_column',
+          type: 'string',
+          description: 'Column in the main file used as the lookup key against both lookup files',
+          required: true
+        },
+        {
+          name: 'lookup_file1_id',
+          type: 'string',
+          description: 'File ID of the first lookup Excel file',
+          required: true
+        },
+        {
+          name: 'lookup_file1_match_column',
+          type: 'string',
+          description: 'Column in lookup file 1 to match against main_match_column',
+          required: true
+        },
+        {
+          name: 'lookup_file1_append_columns',
+          type: 'array',
+          description: 'Columns from lookup file 1 to append to the output',
+          required: true
+        },
+        {
+          name: 'lookup_file2_id',
+          type: 'string',
+          description: 'File ID of the second lookup Excel file',
+          required: true
+        },
+        {
+          name: 'lookup_file2_match_column',
+          type: 'string',
+          description: 'Column in lookup file 2 to match against main_match_column',
+          required: true
+        },
+        {
+          name: 'lookup_file2_append_columns',
+          type: 'array',
+          description: 'Columns from lookup file 2 to append to the output',
+          required: true
+        }
+      ],
+      endpoint: '/tools/excel-dual-lookup-to-csv-file',
+      http_method: 'POST',
+      auth_requirements: [
+        {
+          provider: 'OptiID',
+          scope_bundle: 'default',
+          required: true
+        }
+      ]
     }
   ]
 };
@@ -588,7 +664,16 @@ export class OpalToolFunction extends Function {
       const response = await this.excelSumifToCsvFile(params, authData);
 
       return new Response(200, response);
-    } else {
+    } else if (this.request.path === '/tools/excel-dual-lookup-to-csv-file') {
+
+      const params = this.extractParameters();
+      const authData = this.extractAuthData() as OptiAuthData;
+
+      const response = await this.excelDualLookupToCsvFile(params, authData);
+
+      return new Response(200, response);
+    }
+    else {
       return new Response(400, 'Invalid path');
     }
   }
@@ -950,6 +1035,123 @@ export class OpalToolFunction extends Function {
       }
 
       throw new Error('Failed to process Excel SUMIF');
+    }
+  }
+
+  private async excelDualLookupToCsvFile( // tool 3 fp&a main function
+    parameters: ExcelDualLookupParams,
+    authData: OptiAuthData
+  ) {
+    const {
+      main_file_id,
+      main_match_column,
+      lookup_file1_id,
+      lookup_file1_match_column,
+      lookup_file1_append_columns,
+      lookup_file2_id,
+      lookup_file2_match_column,
+      lookup_file2_append_columns
+    } = parameters;
+
+    try {
+
+      // 🔹 STEP 1: Fetch all three files in parallel
+      const [mainResponse, lookup1Response, lookup2Response] = await Promise.all([
+        axios.get<ArrayBuffer>(
+          `https://opal-backend.optimizely.com/v1/file/${main_file_id}`,
+          {
+            responseType: 'arraybuffer',
+            headers: { Authorization: `Bearer ${authData.credentials.access_token}` }
+          }
+        ),
+        axios.get<ArrayBuffer>(
+          `https://opal-backend.optimizely.com/v1/file/${lookup_file1_id}`,
+          {
+            responseType: 'arraybuffer',
+            headers: { Authorization: `Bearer ${authData.credentials.access_token}` }
+          }
+        ),
+        axios.get<ArrayBuffer>(
+          `https://opal-backend.optimizely.com/v1/file/${lookup_file2_id}`,
+          {
+            responseType: 'arraybuffer',
+            headers: { Authorization: `Bearer ${authData.credentials.access_token}` }
+          }
+        )
+      ]);
+
+      // 🔹 STEP 2: Parse all three workbooks
+      const mainWorkbook = xlsx.read(mainResponse.data, { type: 'buffer' });
+      const lookup1Workbook = xlsx.read(lookup1Response.data, { type: 'buffer' });
+      const lookup2Workbook = xlsx.read(lookup2Response.data, { type: 'buffer' });
+
+      const mainSheet = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+        mainWorkbook.Sheets[mainWorkbook.SheetNames[0]]
+      );
+      const lookup1Sheet = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+        lookup1Workbook.Sheets[lookup1Workbook.SheetNames[0]]
+      );
+      const lookup2Sheet = xlsx.utils.sheet_to_json<Record<string, unknown>>(
+        lookup2Workbook.Sheets[lookup2Workbook.SheetNames[0]]
+      );
+
+      logger.info(`Main file rows: ${mainSheet.length}`);
+      logger.info(`Lookup file 1 rows: ${lookup1Sheet.length}`);
+      logger.info(`Lookup file 2 rows: ${lookup2Sheet.length}`);
+
+      // 🔹 STEP 3: Build a lookup map for each lookup file
+      const lookupMap1 = new Map<string, Record<string, unknown>>();
+      for (const row of lookup1Sheet) {
+        const key = safeCellValue(row[lookup_file1_match_column]);
+        if (key) lookupMap1.set(key, row);
+      }
+
+      const lookupMap2 = new Map<string, Record<string, unknown>>();
+      for (const row of lookup2Sheet) {
+        const key = safeCellValue(row[lookup_file2_match_column]);
+        if (key) lookupMap2.set(key, row);
+      }
+
+      logger.info(`Lookup map 1 size: ${lookupMap1.size}`);
+      logger.info(`Lookup map 2 size: ${lookupMap2.size}`);
+
+      // 🔹 STEP 4: For each main row, append columns from both lookup files
+      const mergedRows: Array<Record<string, unknown>> = [];
+
+      for (const row of mainSheet) {
+        const key = safeCellValue(row[main_match_column]);
+        const mergedRow: Record<string, unknown> = { ...row };
+
+        const match1 = lookupMap1.get(key);
+        for (const column of lookup_file1_append_columns) {
+          mergedRow[column] = match1 ? (match1[column] ?? '') : '';
+        }
+
+        const match2 = lookupMap2.get(key);
+        for (const column of lookup_file2_append_columns) {
+          mergedRow[column] = match2 ? (match2[column] ?? '') : '';
+        }
+
+        mergedRows.push(mergedRow);
+      }
+
+      // 🔹 STEP 5: Convert to CSV
+      const resultSheet = xlsx.utils.json_to_sheet(mergedRows);
+      const csvOutput = xlsx.utils.sheet_to_csv(resultSheet);
+
+      return {
+        filename: 'dual_lookup_result.csv',
+        content: csvOutput,
+        content_type: 'text/csv'
+      };
+
+    } catch (error: unknown) {
+
+      if (error instanceof Error) {
+        logger.error('Excel dual lookup merge failed:', error.message);
+      }
+
+      throw new Error('Failed to process Excel dual lookup merge');
     }
   }
 
