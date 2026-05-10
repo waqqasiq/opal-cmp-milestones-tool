@@ -76,6 +76,7 @@ interface ExcelDualLookupParams {
   lookup_file2_id: string;
   lookup_file2_match_column: string;
   lookup_file2_append_columns: string[];
+  output_template_file_id: string;
 }
 
 function toIsoUtc(dateString: string): string {
@@ -489,6 +490,12 @@ const discoveryPayload = {
   appending selected columns from both lookup files side-by-side into the output CSV.`,
       parameters: [
         {
+          "name": "output_template_file_id",
+          "type": "string",
+          "description": "File ID of the template Excel file whose first row defines the output column order. Any column present in the template but absent from the merged data will be added as an empty column. Columns not in the template are dropped.",
+          "required": true
+        },
+        {
           name: 'main_file_id',
           type: 'string',
           description: 'File ID of the main (base) Excel file',
@@ -672,8 +679,7 @@ export class OpalToolFunction extends Function {
       const response = await this.excelDualLookupToCsvFile(params, authData);
 
       return new Response(200, response);
-    }
-    else {
+    } else {
       return new Response(400, 'Invalid path');
     }
   }
@@ -1050,13 +1056,14 @@ export class OpalToolFunction extends Function {
       lookup_file1_append_columns,
       lookup_file2_id,
       lookup_file2_match_column,
-      lookup_file2_append_columns
+      lookup_file2_append_columns,
+      output_template_file_id
     } = parameters;
 
     try {
 
       // 🔹 STEP 1: Fetch all three files in parallel
-      const [mainResponse, lookup1Response, lookup2Response] = await Promise.all([
+      const [mainResponse, lookup1Response, lookup2Response, templateResponse] = await Promise.all([
         axios.get<ArrayBuffer>(
           `https://opal-backend.optimizely.com/v1/file/${main_file_id}`,
           {
@@ -1073,6 +1080,13 @@ export class OpalToolFunction extends Function {
         ),
         axios.get<ArrayBuffer>(
           `https://opal-backend.optimizely.com/v1/file/${lookup_file2_id}`,
+          {
+            responseType: 'arraybuffer',
+            headers: { Authorization: `Bearer ${authData.credentials.access_token}` }
+          }
+        ),
+        axios.get<ArrayBuffer>(                                                    // ← add this
+          `https://opal-backend.optimizely.com/v1/file/${output_template_file_id}`,
           {
             responseType: 'arraybuffer',
             headers: { Authorization: `Bearer ${authData.credentials.access_token}` }
@@ -1098,6 +1112,12 @@ export class OpalToolFunction extends Function {
       logger.info(`Main file rows: ${mainSheet.length}`);
       logger.info(`Lookup file 1 rows: ${lookup1Sheet.length}`);
       logger.info(`Lookup file 2 rows: ${lookup2Sheet.length}`);
+
+      // 🔹 STEP 2b: Parse template — first row defines output column order
+      const templateWorkbook = xlsx.read(templateResponse.data, { type: 'buffer' });
+      const templateSheet = templateWorkbook.Sheets[templateWorkbook.SheetNames[0]];
+      const [templateRow] = xlsx.utils.sheet_to_json<unknown[]>(templateSheet, { header: 1 });
+      const outputColumns = templateRow.map(String).filter(Boolean);
 
       // 🔹 STEP 3: Build a lookup map for each lookup file
       const lookupMap1 = new Map<string, Record<string, unknown>>();
@@ -1135,8 +1155,17 @@ export class OpalToolFunction extends Function {
         mergedRows.push(mergedRow);
       }
 
-      // 🔹 STEP 5: Convert to CSV
-      const resultSheet = xlsx.utils.json_to_sheet(mergedRows);
+      // 🔹 STEP 5: Shape output to match template column order
+      const shapedRows = mergedRows.map((row) => {
+        const shapedRow: Record<string, unknown> = {};
+        for (const col of outputColumns) {
+          shapedRow[col] = row[col] ?? '';   // blank if not in merged data
+        }
+        return shapedRow;
+      });
+
+      // 🔹 STEP 6: Convert to CSV
+      const resultSheet = xlsx.utils.json_to_sheet(shapedRows);  // ✅
       const csvOutput = xlsx.utils.sheet_to_csv(resultSheet);
 
       return {
